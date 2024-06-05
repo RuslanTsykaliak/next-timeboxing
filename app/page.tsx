@@ -1,113 +1,221 @@
-import Image from "next/image";
+"use client"
+import { useEffect, useState } from "react";
+
+import { TimerGroupT } from "@/app/types/timer";
+import { successSchedule } from "./data/timers";
+
 
 export default function Home() {
+  // const [isAudioMute, setAudioMute] = useState(false)
+  const [playingSound, setPlayingSound] = useState<HTMLAudioElement | null>(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newTimerName, setNewTimerName] = useState('');
+  const [newTimerHours, setNewTimerHours] = useState(0);
+  const [newTimerMinutes, setNewTimerMinutes] = useState(0);
+  const [newTimerSeconds, setNewTimerSeconds] = useState(0);
+
+  const initialTimerGroups = Array.isArray(successSchedule) ? successSchedule : [];
+
+
+  const getInitialTimerGroups = () => {
+    if (typeof window !== 'undefined') {
+      const storedTimerGroups = JSON.parse(localStorage.getItem('timerGroups') || '[]');
+      if (storedTimerGroups.length === 0) {
+        localStorage.setItem('timerGroups', JSON.stringify(initialTimerGroups));
+        return initialTimerGroups;
+      } else {
+        return storedTimerGroups;
+      }
+    } else {
+      return initialTimerGroups;
+    }
+  }
+
+  const [timerGroups, setTimerGroups] = useState<TimerGroupT[]>(getInitialTimerGroups)
+
+  useEffect(() => {
+    localStorage.setItem('timerGroups', JSON.stringify(timerGroups));
+  }, [timerGroups]);
+
+  ////
+  const addGroup = () => {
+    setTimerGroups([...timerGroups, { id: Date.now(), name: newGroupName, timers: [] }]);
+    setNewGroupName('');
+  };
+
+  const addTimer = (groupId: number) => {
+    const duration = newTimerHours * 3600 + newTimerMinutes * 60 + newTimerSeconds;
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: [...group.timers, { id: Date.now(), name: newTimerName, duration, remaining: duration, active: false }]
+    } : group));
+    setNewTimerName('');
+    setNewTimerHours(0);
+    setNewTimerMinutes(0);
+    setNewTimerSeconds(0);
+  };
+
+  const formatTime = (time: number) => {
+    const hours = Math.floor(time / 3600)
+    const minutes = Math.floor((time % 3600) / 60)
+    const seconds = time % 60
+
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const startTimer = (groupId: number, timerId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.map(timer => timer.id === timerId ? { ...timer, active: true } : timer)
+    } : group));
+  };
+
+  const stopTimer = (groupId: number, timerId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.map(timer => timer.id === timerId ? { ...timer, active: false } : timer)
+    } : group))
+  };
+
+  const resetTimer = (groupId: number, timerId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.map(timer => timer.id === timerId ? { ...timer, remaining: timer.duration, active: false } : timer)
+    } : group))
+  }
+
+  const startGroup = (groupId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.map((timer, index) => ({ ...timer, active: index === 0 }))
+    } : group));
+  };
+
+  const stopGroup = (groupId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.map(timer => ({ ...timer, active: false }))
+    } : group))
+  }
+
+  const resetGroup = (groupId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.map(timer => ({ ...timer, remaining: timer.duration, active: false }))
+    } : group));
+  };
+
+  const removeGroup = (groupId: number) => {
+    setTimerGroups(timerGroups.filter(group => group.id !== groupId));
+  };
+
+  const removeTimer = (groupId: number, timerId: number) => {
+    setTimerGroups(timerGroups.map(group => group.id === groupId ? {
+      ...group,
+      timers: group.timers.filter(timer => timer.id !== timerId)
+    } : group));
+  };
+
+
+
+
+  useEffect(() => {
+    // Load the sound
+    const sound = new Audio(
+      "/sounds/536421__rudmer_rotteveel__setting-electronic-timer-multiple-beeps.mp3"
+    );
+
+    const interval = setInterval(() => {
+      setTimerGroups(timerGroups.map(group => ({
+        ...group,
+        timers: group.timers.map((timer, index, timers) => {
+          if (timer.active && timer.remaining > 0) {
+            return { ...timer, remaining: timer.remaining - 1 };
+          } else if (timer.active && timer.remaining === 0) {
+            // Stop the currently playing sound
+            if (playingSound) {
+              playingSound.pause();
+              playingSound.currentTime = 0;
+            }
+            // Start a new sound
+            sound.play();
+            setPlayingSound(sound);
+            return { ...timer, active: false };
+          } else if (!timer.active && timers[index - 1]?.remaining === 0) {
+            return { ...timer, active: true };
+          } else {
+            return timer;
+          }
+        })
+      })));
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (playingSound) {
+        playingSound.pause();
+        playingSound.currentTime = 0;
+      }
+    };
+  }, [timerGroups, playingSound]);
+
+
+
+
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="p-4">
+      <h1 className="text-4xl mb-4">Next Timeboxing</h1>
+      <div>
+        {/* <button onClick={() => setAudioMute(!isAudioMute)}>
+          {isAudioMute ? "Unmute" : "Mute"}
+        </button> */}
+      </div>
+      <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="New group name" />
+
+      <button type="button" onClick={addGroup}>Add Group</button>
+      {timerGroups.map((group) => (
+        <div key={group.id} className="mb-4">
+          <h2 className="text-2xl mb-2">{group.name}</h2>
+          <button type="button" onClick={() => startGroup(group.id)}>
+            Start Group
+          </button>
+          <button type="button" onClick={() => stopGroup(group.id)} >
+            Stop Group
+          </button>
+          <button type="button" onClick={() => resetGroup(group.id)} >
+            Reset Group
+          </button>
+          <button type="button" onClick={() => removeGroup(group.id)} >
+            Remove Group
+          </button>
+
+          <input value={newTimerName} onChange={(e) => setNewTimerName(e.target.value)} placeholder="New timer name" />
+          <input type="number" value={newTimerHours} onChange={(e) => setNewTimerHours(Number(e.target.value))} placeholder="Hours" />
+          <input type="number" value={newTimerMinutes} onChange={(e) => setNewTimerMinutes(Number(e.target.value))} placeholder="Minutes" />
+          <input type="number" value={newTimerSeconds} onChange={(e) => setNewTimerSeconds(Number(e.target.value))} placeholder="Seconds" />
+
+          <button type="button" onClick={() => addTimer(group.id)}>Add Timer</button>
+          {group.timers.map((timer) => (
+            <div key={timer.id} className="mb-2">
+              <h3 className="text-xl">{timer.name}</h3>
+              <p>Duration: {formatTime(timer.duration)}</p>
+              <p>Remaining: {formatTime(timer.remaining)}</p>
+
+              <button type="button" onClick={() => startTimer(group.id, timer.id)}>Start Timer</button>
+              <button type="button" onClick={() => stopTimer(group.id, timer.id)}>
+                Stop Timer
+              </button>
+              <button type="button" onClick={() => resetTimer(group.id, timer.id)}>
+                Reset Timer
+              </button>
+              <button type="button" onClick={() => removeTimer(group.id, timer.id)}>
+                Remove Timer
+              </button>
+            </div>
+          ))}
         </div>
-      </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+      ))}
     </main>
   );
 }
