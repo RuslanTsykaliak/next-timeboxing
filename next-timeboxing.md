@@ -33,8 +33,19 @@ TailwindCSS
 localStorage
 ? PrismaORM with MongoDB
 
+Why create this app? Help people self-improve their performance by better managing and tracking their time.
+
 Implement:
 - Each timer after finishing shouldn't start a new time
+- Group timer. Each group should have an active track of passed time and how much time remains.
+- Edition of every field.
+- changing localStorage to PrismaORM with MongoDB
+- adding authentication with Clerk
+- public and private timers
+- history of your time.
+- 
+
+
 Implemented:
 
 - Create a group
